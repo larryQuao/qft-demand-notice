@@ -1,0 +1,75 @@
+/* QFT Demand Notice Generator - QFT orange accent theme */
+
+.root {
+    -fx-font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-background-color: #fafafa;
+}
+
+.app-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #333333;
+}
+
+.app-subtitle {
+    -fx-font-size: 12px;
+    -fx-text-fill: #666666;
+}
+
+.hint-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: #777777;
+    -fx-font-style: italic;
+}
+
+.section-header {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e87722;
+}
+
+.preview-label {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1f4e9c;
+}
+
+.primary-button {
+    -fx-background-color: #e87722;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-padding: 8px 18px;
+    -fx-background-radius: 4px;
+    -fx-cursor: hand;
+}
+
+.primary-button:hover {
+    -fx-background-color: #d06a1d;
+}
+
+.button {
+    -fx-padding: 8px 14px;
+    -fx-background-radius: 4px;
+}
+
+.status-label {
+    -fx-font-size: 12px;
+}
+
+.status-success {
+    -fx-text-fill: #1e7d32;
+}
+
+.status-error {
+    -fx-text-fill: #b3261e;
+}
+
+.combo-box, .text-field, .spinner {
+    -fx-background-radius: 4px;
+}
+
+.combo-box:focused, .text-field:focused, .spinner:focused {
+    -fx-focus-color: #e87722;
+    -fx-faint-focus-color: #e8772233;
+}

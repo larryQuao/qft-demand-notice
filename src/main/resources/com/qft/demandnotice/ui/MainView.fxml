@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.RowConstraints?>
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.qft.demandnotice.ui.MainController"
+      spacing="10" styleClass="root">
+
+    <padding>
+        <Insets top="18" right="22" bottom="18" left="22"/>
+    </padding>
+
+    <Label text="QFT Demand Notice Generator" styleClass="app-title"/>
+    <Label text="Generate a Tier 2 pension demand notice PDF for NorthCode Ghana."
+           styleClass="app-subtitle" wrapText="true"/>
+    <Separator/>
+
+    <!-- Publisher template -->
+    <Label text="Publisher Template (.pub)" styleClass="section-header"/>
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <TextField fx:id="templatePathField" editable="false"
+                   promptText="No template selected - the built-in layout will be used"
+                   HBox.hgrow="ALWAYS"/>
+        <Button fx:id="browseTemplateButton" text="Browse..." onAction="#handleBrowseTemplate"/>
+        <Button fx:id="clearTemplateButton" text="Clear" onAction="#handleClearTemplate"
+                disable="true"/>
+    </HBox>
+    <Label styleClass="hint-label" wrapText="true"
+           text="Tip: put {{LETTER_DATE}}, {{PERIOD}}, {{AMOUNT}} or {{DEADLINE}} inside the Publisher file to auto-fill those spots from the form below. Without tokens, the .pub is converted exactly as-is."/>
+    <Separator/>
+
+    <!-- Letter date -->
+    <Label text="Letter Date" styleClass="section-header"/>
+    <GridPane hgap="10" vgap="6">
+        <columnConstraints>
+            <ColumnConstraints minWidth="90"/>
+            <ColumnConstraints minWidth="90"/>
+            <ColumnConstraints minWidth="110"/>
+        </columnConstraints>
+        <ComboBox fx:id="letterDayCombo" promptText="Day" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+        <ComboBox fx:id="letterMonthCombo" promptText="Month" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+        <Spinner fx:id="letterYearSpinner" GridPane.rowIndex="0" GridPane.columnIndex="2"/>
+    </GridPane>
+
+    <Separator/>
+
+    <!-- Contribution period -->
+    <Label text="Contribution Month / Year" styleClass="section-header"/>
+    <GridPane hgap="10" vgap="6">
+        <columnConstraints>
+            <ColumnConstraints minWidth="90"/>
+            <ColumnConstraints minWidth="110"/>
+        </columnConstraints>
+        <ComboBox fx:id="contribMonthCombo" promptText="Month" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+        <Spinner fx:id="contribYearSpinner" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+    </GridPane>
+
+    <Separator/>
+
+    <!-- Amount -->
+    <Label text="Amount (GHS)" styleClass="section-header"/>
+    <GridPane hgap="10" vgap="6">
+        <columnConstraints>
+            <ColumnConstraints minWidth="220"/>
+        </columnConstraints>
+        <TextField fx:id="amountField" promptText="e.g. 1389.00"
+                   GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+    </GridPane>
+    <Label fx:id="amountPreviewLabel" text="" styleClass="preview-label"/>
+
+    <Separator/>
+
+    <!-- Payment deadline -->
+    <Label text="Payment Deadline" styleClass="section-header"/>
+    <GridPane hgap="10" vgap="6">
+        <columnConstraints>
+            <ColumnConstraints minWidth="90"/>
+            <ColumnConstraints minWidth="90"/>
+            <ColumnConstraints minWidth="110"/>
+        </columnConstraints>
+        <ComboBox fx:id="deadlineDayCombo" promptText="Day" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+        <ComboBox fx:id="deadlineMonthCombo" promptText="Month" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+        <Spinner fx:id="deadlineYearSpinner" GridPane.rowIndex="0" GridPane.columnIndex="2"/>
+    </GridPane>
+
+    <Separator/>
+
+    <!-- Actions -->
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Button fx:id="generateButton" text="Generate PDF" defaultButton="true"
+                onAction="#handleGenerate" styleClass="primary-button"/>
+        <Button fx:id="clearButton" text="Clear Form" onAction="#handleClear"/>
+        <Button fx:id="openPdfButton" text="Open Last Generated PDF" onAction="#handleOpenPdf"
+                disable="true"/>
+    </HBox>
+
+    <Label fx:id="statusLabel" text="" styleClass="status-label" wrapText="true"/>
+</VBox>
