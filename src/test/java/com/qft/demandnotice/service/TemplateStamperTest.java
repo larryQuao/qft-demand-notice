@@ -9,9 +9,11 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.TextPosition;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
+import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Month;
@@ -19,6 +21,7 @@ import java.time.YearMonth;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TemplateStamperTest {
@@ -48,12 +51,43 @@ class TemplateStamperTest {
         assertTrue(outcome.unreplacedTokens().isEmpty());
 
         String text = extractText(outcome.pdfBytes());
-        // Note: text extraction also reads the original (white-out covered) token
-        // text underneath, so only positive checks are meaningful here.
+        // The placeholders are deleted from the content stream, so they must not
+        // show up in the text layer any more.
+        assertFalse(text.contains("{{LETTER_DATE}}"), text);
+        assertFalse(text.contains("{{PERIOD}}"), text);
+        assertFalse(text.contains("{{AMOUNT}}"), text);
+        assertFalse(text.contains("{{DEADLINE}}"), text);
         assertTrue(text.contains("24th September, 2026"));
         assertTrue(text.contains("September, 2026"));
         assertTrue(text.contains("GHS 1,389.00"));
         assertTrue(text.contains("14th October, 2026"));
+    }
+
+    @Test
+    void stamp_keepsTheSurroundingTextInPlace() throws Exception {
+        byte[] template = pdfWithLines(
+                "RE: DEMAND NOTICE",
+                "Amount: {{AMOUNT}} payable at the branch");
+
+        float tokenX = xOfFirstOccurrence(template, '{');
+        float tailX = xOfFirstOccurrence(template, 'p');
+
+        TemplateStamper.StampOutcome outcome = TemplateStamper.stamp(template, SAMPLE);
+
+        // The value is drawn where the placeholder used to be, at the body's
+        // own font size - values are never shrunk.
+        float valueX = xOfFirstOccurrence(outcome.pdfBytes(), 'G');
+        assertEquals(tokenX, valueX, 0.5f);
+        assertEquals(12f, fontSizeAt(outcome.pdfBytes(), 'G'), 0.01f);
+
+        // The text after the placeholder only moves as far as it must to leave
+        // room for the value: when the value is wider than the token (it never
+        // is shrunk), the rest of the line is shifted right by exactly the
+        // excess, so the value still reads like the surrounding body text.
+        float tokenWidth = FONT.getStringWidth("{{AMOUNT}}") / 1000f * 12f;
+        float valueWidth = FONT.getStringWidth("GHS 1,389.00") / 1000f * 12f;
+        float tailXAfter = xOfFirstOccurrence(outcome.pdfBytes(), 'p');
+        assertEquals(tailX + Math.max(0f, valueWidth - tokenWidth), tailXAfter, 0.6f);
     }
 
     @Test
@@ -105,6 +139,57 @@ class TemplateStamperTest {
     private static String extractText(byte[] pdf) throws Exception {
         try (PDDocument doc = Loader.loadPDF(pdf)) {
             return new PDFTextStripper().getText(doc);
+        }
+    }
+
+    /**
+     * Font size the given character is drawn at, taken from its left-most
+     * occurrence. Used to verify that stamped values keep the body text size.
+     */
+    private static float fontSizeAt(byte[] pdf, char ch) throws Exception {
+        try (PDDocument doc = Loader.loadPDF(pdf)) {
+            float[] leftmost = {Float.MAX_VALUE};
+            float[] size = {-1f};
+            PDFTextStripper stripper = new PDFTextStripper() {
+                @Override
+                protected void processTextPosition(TextPosition text) {
+                    String unicode = text.getUnicode();
+                    if (unicode != null && unicode.indexOf(ch) >= 0
+                            && text.getXDirAdj() < leftmost[0]) {
+                        leftmost[0] = text.getXDirAdj();
+                        size[0] = text.getFontSizeInPt();
+                    }
+                }
+            };
+            stripper.setSortByPosition(true);
+            stripper.writeText(doc, new StringWriter());
+            assertTrue(leftmost[0] < Float.MAX_VALUE,
+                    "character '" + ch + "' was not found in the PDF");
+            return size[0];
+        }
+    }
+
+    /**
+     * Left-most x coordinate of the given character in the PDF's text layer.
+     * Used to verify that stamping does not move the surrounding text.
+     */
+    private static float xOfFirstOccurrence(byte[] pdf, char ch) throws Exception {
+        try (PDDocument doc = Loader.loadPDF(pdf)) {
+            float[] leftmost = {Float.MAX_VALUE};
+            PDFTextStripper stripper = new PDFTextStripper() {
+                @Override
+                protected void processTextPosition(TextPosition text) {
+                    String unicode = text.getUnicode();
+                    if (unicode != null && unicode.indexOf(ch) >= 0) {
+                        leftmost[0] = Math.min(leftmost[0], text.getXDirAdj());
+                    }
+                }
+            };
+            stripper.setSortByPosition(true);
+            stripper.writeText(doc, new StringWriter());
+            assertTrue(leftmost[0] < Float.MAX_VALUE,
+                    "character '" + ch + "' was not found in the PDF");
+            return leftmost[0];
         }
     }
 }

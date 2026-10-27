@@ -14,14 +14,20 @@ public final class AmountFormatter {
 
     public static final String CURRENCY_PREFIX = "GHS ";
 
-    private static final DecimalFormat DISPLAY_FORMAT;
-
-    static {
-        // Force US-style symbols so we always get "1,389.00" regardless of JVM locale.
-        DecimalFormatSymbols symbols = DecimalFormatSymbols.getInstance(Locale.US);
-        DISPLAY_FORMAT = new DecimalFormat("#,##0.00", symbols);
-        DISPLAY_FORMAT.setParseBigDecimal(true);
-    }
+    /**
+     * {@link DecimalFormat} is not thread-safe, and formatting happens on both
+     * the JavaFX thread and the background generation thread, so each thread
+     * gets its own instance.
+     */
+    private static final ThreadLocal<DecimalFormat> DISPLAY_FORMAT =
+            ThreadLocal.withInitial(() -> {
+                // Force US-style symbols so we always get "1,389.00" regardless
+                // of the JVM locale.
+                DecimalFormatSymbols symbols = DecimalFormatSymbols.getInstance(Locale.US);
+                DecimalFormat format = new DecimalFormat("#,##0.00", symbols);
+                format.setParseBigDecimal(true);
+                return format;
+            });
 
     private AmountFormatter() {
     }
@@ -31,7 +37,7 @@ public final class AmountFormatter {
      * prefixed with "GHS ", e.g. {@code GHS 1,389.00}.
      */
     public static String format(BigDecimal amount) {
-        return CURRENCY_PREFIX + DISPLAY_FORMAT.format(amount);
+        return CURRENCY_PREFIX + DISPLAY_FORMAT.get().format(amount);
     }
 
     /**

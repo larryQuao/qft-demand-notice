@@ -6,3 +6,6 @@ target/
 *.iml
 .vscode/
 .DS_Store
+
+# probe scratch PDFs in the repo root
+/*.pdf

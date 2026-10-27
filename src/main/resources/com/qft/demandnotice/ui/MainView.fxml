@@ -36,7 +36,7 @@
                 disable="true"/>
     </HBox>
     <Label styleClass="hint-label" wrapText="true"
-           text="Tip: put {{LETTER_DATE}}, {{PERIOD}}, {{AMOUNT}} or {{DEADLINE}} inside the Publisher file to auto-fill those spots from the form below. Without tokens, the .pub is converted exactly as-is."/>
+           text="Tip: put {{LETTER_DATE}}, {{PERIOD}}, {{AMOUNT}} or {{DEADLINE}} inside the Publisher file to auto-fill those spots. If the .pub has none, the app auto-inserts the placeholders into a temporary COPY (your original is never modified) and previews the result - use &quot;Preview PDF&quot; to check before saving."/>
     <Separator/>
 
     <!-- Letter date -->
@@ -97,6 +97,7 @@
 
     <!-- Actions -->
     <HBox spacing="10" alignment="CENTER_LEFT">
+        <Button fx:id="previewButton" text="Preview PDF" onAction="#handlePreview"/>
         <Button fx:id="generateButton" text="Generate PDF" defaultButton="true"
                 onAction="#handleGenerate" styleClass="primary-button"/>
         <Button fx:id="clearButton" text="Clear Form" onAction="#handleClear"/>

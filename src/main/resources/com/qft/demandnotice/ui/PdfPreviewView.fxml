@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.qft.demandnotice.ui.PdfPreviewController"
+            styleClass="root, preview-root">
+
+    <top>
+        <VBox spacing="8">
+            <padding>
+                <Insets top="14" right="18" bottom="10" left="18"/>
+            </padding>
+            <Label text="Preview - check the dates and values before saving"
+                   styleClass="app-title"/>
+            <Label fx:id="tokenStatusLabel" text="" wrapText="true" styleClass="hint-label"/>
+            <Separator/>
+        </VBox>
+    </top>
+
+    <center>
+        <ScrollPane fx:id="previewScrollPane" fitToWidth="false" fitToHeight="false"
+                    styleClass="preview-scroll" pannable="true">
+            <content>
+                <StackPane fx:id="pageContainer" styleClass="preview-page-container">
+                    <ImageView fx:id="previewImageView"/>
+                </StackPane>
+            </content>
+        </ScrollPane>
+    </center>
+
+    <bottom>
+        <VBox spacing="8">
+            <padding>
+                <Insets top="10" right="18" bottom="14" left="18"/>
+            </padding>
+            <Separator/>
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Button text="&#x25C0; Previous" onAction="#handlePrevPage"/>
+                <Label fx:id="pageLabel" text="" styleClass="preview-label"/>
+                <Button text="Next &#x25B6;" onAction="#handleNextPage"/>
+                <Separator orientation="VERTICAL"/>
+                <Button text="&#x2212; Zoom out" onAction="#handleZoomOut"/>
+                <Label fx:id="zoomLabel" text="100%" styleClass="preview-label"/>
+                <Button text="+ Zoom in" onAction="#handleZoomIn"/>
+                <Button fx:id="fitButton" text="Fit page" onAction="#handleFit"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button fx:id="saveButton" text="Save PDF..." onAction="#handleSave"
+                        styleClass="primary-button" defaultButton="true"/>
+            </HBox>
+        </VBox>
+    </bottom>
+</BorderPane>

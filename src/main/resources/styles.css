@@ -69,6 +69,30 @@
     -fx-background-radius: 4px;
 }
 
+/* ---------------- PDF preview window ---------------- */
+
+.preview-root {
+    -fx-background-color: #f0f0f0;
+}
+
+.preview-scroll {
+    -fx-background-color: transparent;
+    -fx-background: #d9d9d9;
+}
+
+.preview-scroll > .viewport {
+    -fx-background-color: #d9d9d9;
+}
+
+.preview-page-container {
+    -fx-padding: 12;
+}
+
+.preview-page-container ImageView {
+    /* A soft drop shadow makes the page read as a sheet of paper. */
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 10, 0.1, 0, 3);
+}
+
 .combo-box:focused, .text-field:focused, .spinner:focused {
     -fx-focus-color: #e87722;
     -fx-faint-focus-color: #e8772233;

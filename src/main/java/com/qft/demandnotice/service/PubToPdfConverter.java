@@ -1,5 +1,6 @@
 package com.qft.demandnotice.service;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -51,20 +52,41 @@ public final class PubToPdfConverter {
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
-            String output;
+
+            // Drain the merged stdout/stderr pipe while the process runs: a chatty
+            // PowerShell script can fill the OS pipe buffer (typically 4-64 KB) and
+            // then block forever, so reading only after waitFor() could deadlock.
+            ByteArrayOutputStream captured = new ByteArrayOutputStream();
+            Thread drain = new Thread(() -> {
+                try (InputStream in = process.getInputStream()) {
+                    in.transferTo(captured);
+                } catch (IOException ignored) {
+                    // the pipe closes when the process exits or is killed
+                }
+            }, "pub-to-pdf-output");
+            drain.setDaemon(true);
+            drain.start();
+
+            boolean finished;
             try {
-                boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
                 if (!finished) {
                     process.destroyForcibly();
-                    throw new IOException("Publisher conversion timed out after "
-                            + TIMEOUT_SECONDS + " seconds. If Microsoft Publisher is open, "
-                            + "close it and try again.");
                 }
+                // Once the process is gone the pipe reaches EOF, so the drain
+                // thread finishes promptly; the timeout is only a safety net.
+                drain.join(5000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 process.destroyForcibly();
                 throw new IOException("Publisher conversion was interrupted.", e);
+            }
+
+            String output = captured.toString(StandardCharsets.UTF_8);
+            if (!finished) {
+                throw new IOException("Publisher conversion timed out after "
+                        + TIMEOUT_SECONDS + " seconds. If Microsoft Publisher is open, "
+                        + "close it and try again.");
             }
 
             if (process.exitValue() != 0 || !Files.isRegularFile(pdfOut)) {

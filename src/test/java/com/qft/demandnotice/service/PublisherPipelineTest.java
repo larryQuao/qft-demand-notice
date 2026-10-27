@@ -76,6 +76,61 @@ class PublisherPipelineTest {
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
 
+    /**
+     * End-to-end test of the auto-fill flow {@link TemplateStamper#prepare}:
+     * the .pub is a filled-in letter (no tokens), so placeholders must be
+     * recognised, auto-inserted into a copy, and stamped with fresh values.
+     */
+    @Test
+    void filledLetter_isAutoTokenizedAndStamped() throws Exception {
+        Assumptions.assumeTrue(publisherInstalled(),
+                "Microsoft Publisher not installed - skipping integration test");
+        Assumptions.assumeTrue(!publisherRunning(),
+                "Microsoft Publisher is currently running - skipping to avoid interfering "
+                        + "with the interactive session");
+
+        Path pub = tempDir.resolve("filled.pub");
+        Path finalOut = tempDir.resolve("Demand_Notice_Filled_September2026.pdf");
+
+        createFilledPub(pub);
+
+        DemandNoticeData data = new DemandNoticeData(
+                LocalDate.of(2026, Month.NOVEMBER, 3),
+                YearMonth.of(2026, Month.OCTOBER),
+                new BigDecimal("4120.50"),
+                LocalDate.of(2026, Month.NOVEMBER, 17));
+
+        // The original .pub must not be touched by prepare().
+        byte[] pubBefore = Files.readAllBytes(pub);
+
+        TemplateStamper.PreparedTemplate prepared = TemplateStamper.prepare(pub);
+        assertTrue(prepared.hasTokens(), "auto-tokenize found no tokens");
+        assertTrue(prepared.autoInserted().containsAll(List.of(
+                "AMOUNT", "DEADLINE", "PERIOD", "LETTER_DATE")),
+                "not all fields auto-recognized: " + prepared.autoInserted());
+        assertTrue(prepared.missingTokens().isEmpty(),
+                "unexpectedly missing tokens: " + prepared.missingTokens());
+        assertTrue(java.util.Arrays.equals(pubBefore, Files.readAllBytes(pub)),
+                "prepare() modified the original .pub");
+
+        TemplateStamper.StampOutcome outcome = prepared.stamp(data);
+        Files.write(finalOut, outcome.pdfBytes());
+        assertTrue(outcome.replacedTokens().containsAll(List.of(
+                "{{LETTER_DATE}}", "{{PERIOD}}", "{{AMOUNT}}", "{{DEADLINE}}")));
+
+        String text;
+        try (PDDocument doc = Loader.loadPDF(finalOut.toFile())) {
+            text = new PDFTextStripper().getText(doc);
+        }
+        assertTrue(text.contains("GHS 4,120.50"), "stamped amount missing:\n" + text);
+        assertTrue(text.contains("3rd November, 2026"), "stamped letter date missing:\n" + text);
+        assertTrue(text.contains("October, 2026"), "stamped period missing:\n" + text);
+        assertTrue(text.contains("17th November, 2026"), "stamped deadline missing:\n" + text);
+        assertFalse(text.contains("GHS 2,345.16"),
+                "the old hard-coded amount survived the stamping:\n" + text);
+        assertFalse(text.contains("{{"), "token not replaced:\n" + text);
+    }
+
     // ------------------------------------------------------------------
 
     private static boolean publisherInstalled() {
@@ -125,5 +180,25 @@ class PublisherPipelineTest {
         }
         Assumptions.assumeTrue(finished && process.exitValue() == 0 && Files.isRegularFile(out),
                 "Could not create probe .pub via Publisher COM:\n" + output);
+    }
+
+    private static void createFilledPub(Path out) throws Exception {
+        try (var in = PublisherPipelineTest.class.getResourceAsStream("/scripts/create_filled_pub.ps1")) {
+            Files.write(out.resolveSibling("create_filled_pub.ps1"), in.readAllBytes());
+        }
+        ProcessBuilder pb = new ProcessBuilder(
+                "powershell.exe", "-NoProfile", "-NonInteractive",
+                "-ExecutionPolicy", "Bypass",
+                "-File", out.resolveSibling("create_filled_pub.ps1").toAbsolutePath().toString(),
+                "-OutPath", out.toAbsolutePath().toString());
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+        boolean finished = process.waitFor(240, TimeUnit.SECONDS);
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        if (!finished) {
+            process.destroyForcibly();
+        }
+        Assumptions.assumeTrue(finished && process.exitValue() == 0 && Files.isRegularFile(out),
+                "Could not create filled .pub via Publisher COM:\n" + output);
     }
 }
