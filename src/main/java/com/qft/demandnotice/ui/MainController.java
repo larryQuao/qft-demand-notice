@@ -444,14 +444,25 @@ public class MainController {
         return note;
     }
 
+    /**
+     * One-line status for the main window. When a template yields fewer
+     * replacements than placeholders, the missing fields are named right
+     * here - the most likely cause is a .pub letter without the
+     * {@code {{PERIOD}}} / {@code {{DEADLINE}}} text.
+     */
     private String previewStatus(TemplateStamper.StampOutcome outcome) {
         if (outcome.replacedTokens().isEmpty()) {
             return "Preview ready, but the template has no {{...}} placeholders - nothing "
                     + "was filled in. Saving is disabled.";
         }
-        return "Preview ready - " + outcome.replacedTokens().size()
-                + " of " + TemplateStamper.TOKENS.size()
-                + " fields filled in. Check the values, then click Save PDF.";
+        String status = "Preview ready - " + outcome.replacedTokens().size()
+                + " of " + TemplateStamper.TOKENS.size() + " fields filled in";
+        if (!outcome.unreplacedTokens().isEmpty()) {
+            status += "\nNOT found in this template: "
+                    + String.join(", ", outcome.unreplacedTokens())
+                    + " - the .pub is missing this text, so these values are not filled in";
+        }
+        return status + ". Check the values, then click Save PDF.";
     }
 
     /** Writes the previewed bytes to a user-chosen file (called by the preview). */
