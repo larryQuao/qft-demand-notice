@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -209,12 +210,39 @@ public final class TemplateStamper {
      * template file (and is re-run automatically when the .pub changes).</p>
      */
     public static PreparedTemplate prepare(Path pubFile) throws IOException {
+        byte[] pubBytes = Files.readAllBytes(pubFile);
+
+        // 1. Cached tokenized conversion: the fast path for filled-in .pub
+        //    letters (no Microsoft Publisher run at all when it hits).
+        Optional<TemplateCache.Entry> cachedTokenized =
+                TemplateCache.load(pubBytes, "tokenized");
+        if (cachedTokenized.isPresent()) {
+            List<String> present = findTokens(cachedTokenized.get().pdf());
+            if (!present.isEmpty()) {
+                return new PreparedTemplate(cachedTokenized.get().pdf(), present,
+                        cachedTokenized.get().replaced(), cachedTokenized.get().missed(), true);
+            }
+        }
+
+        // 2. Cached plain conversion: the fast path for .pub files that carry
+        //    {{...}} tokens of their own.
+        Optional<TemplateCache.Entry> cachedPlain = TemplateCache.load(pubBytes, "plain");
+        if (cachedPlain.isPresent()) {
+            List<String> present = findTokens(cachedPlain.get().pdf());
+            if (!present.isEmpty()) {
+                return new PreparedTemplate(cachedPlain.get().pdf(), present,
+                        List.of(), List.of(), false);
+            }
+        }
+
+        // From here on: the full pipeline.
         Path convertedPdf = Files.createTempFile("qft_prepared_template_", ".pdf");
         try {
             PubToPdfConverter.convert(pubFile, convertedPdf);
             byte[] pdf = Files.readAllBytes(convertedPdf);
             List<String> present = findTokens(pdf);
             if (!present.isEmpty()) {
+                TemplateCache.store(pubBytes, "plain", pdf, List.of(), List.of());
                 return new PreparedTemplate(pdf, present, List.of(), List.of(), false);
             }
 
@@ -230,6 +258,10 @@ public final class TemplateStamper {
                         PubToPdfConverter.convert(tokenizedCopy, convertedTokenized);
                         byte[] tokenizedPdf = Files.readAllBytes(convertedTokenized);
                         List<String> tokens = findTokens(tokenizedPdf);
+                        if (!tokens.isEmpty()) {
+                            TemplateCache.store(pubBytes, "tokenized", tokenizedPdf,
+                                    report.replaced(), report.missed());
+                        }
                         return new PreparedTemplate(tokenizedPdf, tokens,
                                 report.replaced(), report.missed(), true);
                     } finally {

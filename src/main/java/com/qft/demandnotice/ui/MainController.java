@@ -6,6 +6,7 @@ import com.qft.demandnotice.service.DateFormatter;
 import com.qft.demandnotice.service.PdfGenerator;
 import com.qft.demandnotice.service.TemplateStamper;
 import com.qft.demandnotice.util.Constants;
+import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -39,6 +40,8 @@ import java.time.Month;
 import java.time.YearMonth;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /** Controller wiring the demand notice form to the PDF generator. */
 public class MainController {
@@ -72,6 +75,21 @@ public class MainController {
     private Path lastGeneratedPath;
     private Path selectedTemplate;
     private File lastSaveDir;
+
+    /**
+     * Runs the (slow) Publisher conversions one at a time. A template picked
+     * in the file chooser starts converting immediately, so the result is
+     * usually ready long before the user clicks "Preview PDF".
+     */
+    private final java.util.concurrent.ExecutorService templatePreparer =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread worker = new Thread(r, "pub-template-preparer");
+                worker.setDaemon(true);
+                return worker;
+            });
+    /** Conversion in flight (or done) for {@link #selectedTemplate}. */
+    private java.util.concurrent.CompletableFuture<TemplateStamper.PreparedTemplate>
+            preparation;
 
     /**
      * The currently converted template. Converting with Microsoft Publisher
@@ -146,7 +164,9 @@ public class MainController {
         templatePathField.setText(chosen.getAbsolutePath());
         clearTemplateButton.setDisable(false);
         invalidatePreparedTemplate();
-        setStatus("Template selected. Use \"Preview PDF\" to check the result before saving.", true);
+        startTemplatePreparation();
+        setStatus("Template selected - converting in the background..."
+                + " You can fill in the form meanwhile.", true);
     }
 
     @FXML
@@ -163,6 +183,57 @@ public class MainController {
         preparedTemplate = null;
         preparedFrom = null;
         preparedFromStamp = null;
+        // The running conversion is left alone on purpose: its result lands in
+        // the disk cache, so switching back to that .pub later is instant.
+        preparation = null;
+    }
+
+    /**
+     * Starts converting the currently selected .pub in the background (one
+     * conversion at a time). When it finishes, the result is cached in memory
+     * so the first preview does not have to wait for Microsoft Publisher.
+     */
+    private void startTemplatePreparation() {
+        final Path template = selectedTemplate;
+        if (template == null) {
+            return;
+        }
+        CompletableFuture<TemplateStamper.PreparedTemplate> thisRun =
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return TemplateStamper.prepare(template);
+                    } catch (IOException e) {
+                        throw new CompletionException(e);
+                    }
+                }, templatePreparer);
+        preparation = thisRun;
+        thisRun.whenComplete((prepared, error) -> Platform.runLater(() -> {
+            if (preparation != thisRun) {
+                return; // superseded by a different template
+            }
+            if (error != null) {
+                setStatus("Template conversion failed: " + rootMessage(error), false);
+                return;
+            }
+            try {
+                preparedTemplate = prepared;
+                preparedFrom = template;
+                preparedFromStamp = stampOf(template);
+            } catch (IOException e) {
+                return;
+            }
+            setStatus("Template is ready for preview.", true);
+        }));
+    }
+
+    /** The tail of an error chain, for status messages. */
+    private static String rootMessage(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause.getCause() == null) {
+                return cause.getMessage() == null ? cause.toString() : cause.getMessage();
+            }
+        }
+        return error.toString();
     }
 
     /**
@@ -185,26 +256,32 @@ public class MainController {
     }
 
     /**
-     * Converts the selected .pub (once) and then stamps + previews. The slow
-     * conversion runs on a background thread; stamping is done there too so the
-     * UI thread only renders the finished bytes.
+     * Stamps the prepared template and previews it. The conversion (when still
+     * needed) runs in the shared preparer queue; stamping runs in this task so
+     * the UI thread only renders the finished bytes.
      */
     private void prepareAndPreview(DemandNoticeData data) {
-        boolean needsConversion = !isPreparedTemplateCurrent();
-        setBusy(true, needsConversion
+        if (preparation == null || preparation.isCompletedExceptionally()) {
+            // First preview after launch (or the previous attempt failed, e.g.
+            // Publisher was busy): start a fresh conversion.
+            startTemplatePreparation();
+        }
+        final CompletableFuture<TemplateStamper.PreparedTemplate> scheduled = preparation;
+        boolean converting = !scheduled.isDone();
+        setBusy(true, converting
                 ? "Converting the template with Microsoft Publisher, please wait..."
                 : "Updating the preview...");
         if (previewController != null && previewStage != null && previewStage.isShowing()) {
             previewController.setSaveEnabled(false);
         }
 
+        final Path from = selectedTemplate;
         Task<PreviewPayload> task = new Task<>() {
             @Override
             protected PreviewPayload call() throws Exception {
-                TemplateStamper.PreparedTemplate prepared =
-                        needsConversion ? TemplateStamper.prepare(selectedTemplate) : preparedTemplate;
+                TemplateStamper.PreparedTemplate prepared = scheduled.get();
                 TemplateStamper.StampOutcome outcome = prepared.stamp(data);
-                return new PreviewPayload(prepared, outcome, selectedTemplate, stampOf(selectedTemplate));
+                return new PreviewPayload(prepared, outcome, from, stampOf(from));
             }
         };
 
@@ -221,7 +298,11 @@ public class MainController {
 
         task.setOnFailed(e -> {
             setBusy(false, null);
-            showError("Template conversion failed.\n\n" + task.getException().getMessage());
+            Throwable error = task.getException();
+            String detail = error instanceof java.util.concurrent.CompletionException
+                    && error.getCause() != null
+                    ? rootMessage(error.getCause()) : rootMessage(error);
+            showError("Template conversion failed.\n\n" + detail);
         });
 
         new Thread(task, "pub-preview-preparer").start();
