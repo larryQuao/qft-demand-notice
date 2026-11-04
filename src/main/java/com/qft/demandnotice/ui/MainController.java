@@ -139,7 +139,51 @@ public class MainController {
         amountField.textProperty().addListener((obs, oldText, newText) ->
                 updateAmountPreview(newText));
 
+        installDragAndDrop();
+
         setStatus(null, false);
+    }
+
+    /**
+     * Lets the user drop a Publisher (.pub) file anywhere on the window to
+     * select it as the template - same effect as using the Browse button:
+     * it is adopted and starts converting in the background right away.
+     */
+    private void installDragAndDrop() {
+        statusLabel.sceneProperty().addListener((obs, oldScene, scene) -> {
+            if (scene == null) {
+                return;
+            }
+            scene.setOnDragOver(event -> {
+                // Accept any file drag so Windows shows the copy cursor;
+                // non-.pub drops are rejected in setOnDragDropped.
+                if (event.getDragboard().hasFiles()) {
+                    event.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
+                }
+                event.consume();
+            });
+            scene.setOnDragDropped(event -> {
+                javafx.scene.input.Dragboard board = event.getDragboard();
+                boolean handled = false;
+                if (board.hasFiles()) {
+                    Path pub = board.getFiles().stream()
+                            .filter(file -> file.getName().toLowerCase(
+                                    java.util.Locale.ENGLISH).endsWith(".pub"))
+                            .map(File::toPath)
+                            .findFirst()
+                            .orElse(null);
+                    if (pub != null) {
+                        adoptTemplate(pub);
+                        handled = true;
+                    } else {
+                        setStatus("Only Microsoft Publisher (.pub) files can be "
+                                + "dropped here as the template.", false);
+                    }
+                }
+                event.setDropCompleted(handled);
+                event.consume();
+            });
+        });
     }
 
     // ------------------------------------------------------------------
@@ -160,8 +204,13 @@ public class MainController {
         if (chosen == null) {
             return;
         }
-        selectedTemplate = chosen.toPath();
-        templatePathField.setText(chosen.getAbsolutePath());
+        adoptTemplate(chosen.toPath());
+    }
+
+    /** Uses {@code pub} as the selected template and starts preparing it. */
+    private void adoptTemplate(Path pub) {
+        selectedTemplate = pub;
+        templatePathField.setText(pub.toString());
         clearTemplateButton.setDisable(false);
         invalidatePreparedTemplate();
         startTemplatePreparation();

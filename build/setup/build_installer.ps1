@@ -2,11 +2,22 @@
 # jpackage (WiX based MSI, bundles its own Java 21 runtime - no Java needed
 # on the target machine).
 #
+# The application version is read from pom.xml, so bump the pom version for
+# every release; the MSI name and --app-version follow automatically.
+#
 # Usage: powershell -File build\setup\build_installer.ps1   (build first:
 #        mvn -o package)
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$pomText = Get-Content (Join-Path $repoRoot 'pom.xml') -Raw
+if ($pomText -match 'qft-demand-notice</artifactId>\s*<version>([^<]+)</version>') {
+    $appVersion = $Matches[1]
+} else {
+    throw 'Could not read the version from pom.xml (qft-demand-notice version tag).'
+}
+Write-Output "building installer for version $appVersion"
+
 $jarPath = Join-Path $repoRoot 'target\qft-demand-notice.jar'
 if (!(Test-Path $jarPath)) {
     throw "Jar not found: $jarPath (run 'mvn -o package' first)"
@@ -35,7 +46,7 @@ $modules = 'java.se,jdk.unsupported,jdk.crypto.ec,jdk.zipfs'
     --name 'QFT Demand Notice Generator' `
     --description 'Generates tier-2 pension demand notices from Publisher letter templates.' `
     --vendor 'QFTL' `
-    --app-version 1.0.0 `
+    --app-version $appVersion `
     --copyright 'QFTL' `
     --input $staging `
     --main-jar qft-demand-notice.jar `

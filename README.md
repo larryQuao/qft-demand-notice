@@ -10,6 +10,8 @@ pension contributions, matching the QFT (Qlac Financial Trust) sample layout.
 - To *run* the app, no Java is needed if you use the bundled installer (below)
 - Microsoft Publisher - only when using a `.pub` letter template
 
+Changes and features for every release are documented in [CHANGELOG.md](CHANGELOG.md).
+
 ## Build
 
 ```bash
@@ -44,7 +46,8 @@ java -jar target/qft-demand-notice.jar
 ## Use
 
 1. (Optional) Click **Browse...** and select your Microsoft Publisher
-   template (`.pub`) — e.g. the QFTL letter head file. The app converts it
+   template (`.pub`) — e.g. the QFTL letter head file — or simply **drag and
+   drop** the .pub file anywhere onto the main window. The app converts it
    with Microsoft Publisher (which must be installed) in the background as
    soon as you pick the file, and stamps the four fields from the form into
    it. Converting takes 15-20 s the first time; afterwards it is taken from
