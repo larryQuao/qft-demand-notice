@@ -9,3 +9,6 @@ target/
 
 # probe scratch PDFs in the repo root
 /*.pdf
+
+# shade plugin's temporary pom
+dependency-reduced-pom.xml
