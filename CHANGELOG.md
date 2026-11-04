@@ -8,6 +8,17 @@ Each implemented change set ships as a version bump of the application
 - **MINOR** - new features
 - **PATCH** - fixes without new features
 
+## [1.2.0] - 2026-11-04
+
+### Added
+- **Gesture zoom in the preview window**: `Ctrl` + mouse wheel zooms in/out
+  anchored at the cursor, two-finger pinch zooms on Windows precision
+  touchpads (the OS reports pinch as ctrl + wheel), two-finger strokes on a
+  touch screen zoom via JavaFX `ZoomEvent`, and mouse dragging pans the page
+  (the ScrollPane is pannable). Zoom stays within the existing 25 %-400 %
+  limits and stays in sync with the zoom buttons and the "Fit page"
+  controls.
+
 ## [1.1.0] - 2026-11-04
 
 ### Added

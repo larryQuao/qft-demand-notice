@@ -64,6 +64,89 @@ public class PdfPreviewController {
                     pageContainer.setMinHeight(bounds.getHeight());
                     recomputeFitZoom(bounds.getWidth(), bounds.getHeight());
                 });
+        installGestureZoom();
+    }
+
+    /**
+     * Gesture zoom for the page preview:
+     * <ul>
+     *   <li>{@code Ctrl} + mouse wheel zooms in/out, anchored at the cursor.
+     *       This also covers two-finger pinch on Windows precision touchpads,
+     *       which the OS reports as a ctrl + wheel scroll.</li>
+     *   <li>Two-finger pinch on a touch screen arrives as a JavaFX
+     *       {@link javafx.scene.input.ZoomEvent}, zooming per the gesture.</li>
+     *   <li>Plain scrolling (wheel or two-finger) pans the page; the ScrollPane
+     *       is also pannable, so dragging with the mouse moves the page too.</li>
+     * </ul>
+     */
+    private void installGestureZoom() {
+        previewScrollPane.addEventFilter(javafx.scene.input.ScrollEvent.ANY, event -> {
+            if (!event.isControlDown()) {
+                return; // plain scrolling pans the document as usual
+            }
+            double deltaY = event.getDeltaY();
+            double deltaX = event.getDeltaX();
+            if (deltaY != 0 || deltaX != 0) {
+                double dominant = Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
+                // One wheel notch is deltaY = 40; keep 1.25x per notch so the
+                // wheel matches the zoom buttons.
+                zoomAt(zoom * (float) Math.pow(ZOOM_STEP, dominant / 40.0),
+                        event.getSceneX(), event.getSceneY());
+            }
+            event.consume();
+        });
+        previewScrollPane.addEventFilter(javafx.scene.input.ZoomEvent.ANY, event -> {
+            zoomAt(zoom * (float) event.getZoomFactor(),
+                    event.getSceneX(), event.getSceneY());
+            event.consume();
+        });
+    }
+
+    /**
+     * Applies {@code newZoom} and, when the gesture comes from a pointing
+     * device, keeps the point under the cursor/finger anchored: whatever part
+     * of the page was at the cursor before the zoom stays there afterwards.
+     */
+    private void zoomAt(double newZoom, double sceneX, double sceneY) {
+        if (previewImageView.getImage() == null) {
+            setZoom((float) newZoom);
+            return;
+        }
+        javafx.geometry.Bounds before = previewImageView.localToScene(
+                previewImageView.getBoundsInLocal());
+        javafx.geometry.Bounds viewport = previewScrollPane.localToScene(
+                previewScrollPane.getViewportBounds());
+        if (before.getWidth() <= 0 || before.getHeight() <= 0
+                || viewport.getWidth() <= 0 || viewport.getHeight() <= 0) {
+            setZoom((float) newZoom);
+            return;
+        }
+        // Where on the page was the cursor, as a 0..1 fraction of the image?
+        double fractionX = clamp01((sceneX - before.getMinX()) / before.getWidth());
+        double fractionY = clamp01((sceneY - before.getMinY()) / before.getHeight());
+
+        setZoom((float) newZoom);
+        // Force the new fit width/height to be laid out before re-anchoring.
+        previewScrollPane.applyCss();
+        previewScrollPane.layout();
+
+        javafx.geometry.Bounds after = previewImageView.localToScene(
+                previewImageView.getBoundsInLocal());
+        double rangeX = after.getWidth() - viewport.getWidth();
+        double rangeY = after.getHeight() - viewport.getHeight();
+        if (rangeX > 0) {
+            // Shift the content so the fraction point sits under the cursor.
+            previewScrollPane.setHvalue((fractionX * after.getWidth()
+                    - (sceneX - after.getMinX())) / rangeX);
+        }
+        if (rangeY > 0) {
+            previewScrollPane.setVvalue((fractionY * after.getHeight()
+                    - (sceneY - after.getMinY())) / rangeY);
+        }
+    }
+
+    private static double clamp01(double value) {
+        return Math.max(0, Math.min(1, value));
     }
 
     /** Wires the callback the host uses to run the Save dialog. */

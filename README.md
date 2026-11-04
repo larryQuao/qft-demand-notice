@@ -72,7 +72,9 @@ java -jar target/qft-demand-notice.jar
 - The main window opens sized to the desktop **work area** (screen minus
   taskbar); you can still resize it.
 - The preview window always opens at one fixed size, centered — it never
-  remembers a previous drag or resize.
+  remembers a previous drag or resize. Inside it, `Ctrl` + wheel and
+  two-finger pinch zoom in/out (anchored at the cursor or fingers), and the
+  page can be dragged with the mouse when it is larger than the window.
 - Stamped values are always drawn at full size: when a value is wider than
   its placeholder the rest of the line shifts (or word spacing tightens)
   instead of the text shrinking or overlapping.
