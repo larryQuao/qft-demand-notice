@@ -8,6 +8,19 @@ Each implemented change set ships as a version bump of the application
 - **MINOR** - new features
 - **PATCH** - fixes without new features
 
+## [1.2.1] - 2026-11-20
+
+### Added
+- **AGENTS.md**: an AI-agent-readable project guide containing the architecture,
+  build/release commands, hard invariants, and the full memory of the session
+  that built the app (decisions, completed work, current state, known caveats,
+  and how to continue). OpenCode automatically loads this file as project
+  instructions, so a fresh agent starts with the same context.
+
+### Fixed
+- `README.md` referenced a stale hard-coded `1.0.0` MSI filename; it now
+  documents the pom-derived versioned installer name.
+
 ## [1.2.0] - 2026-11-04
 
 ### Added

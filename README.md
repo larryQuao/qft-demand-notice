@@ -11,6 +11,8 @@ pension contributions, matching the QFT (Qlac Financial Trust) sample layout.
 - Microsoft Publisher - only when using a `.pub` letter template
 
 Changes and features for every release are documented in [CHANGELOG.md](CHANGELOG.md).
+AI agents: [AGENTS.md](AGENTS.md) contains project guidance plus the session
+memory/handoff context so work can continue from where it ended.
 
 ## Build
 
@@ -30,10 +32,11 @@ target/qft-demand-notice.jar
 powershell -ExecutionPolicy Bypass -File build\setup\build_installer.ps1
 ```
 
-Produces `target/setup/QFT Demand Notice Generator-1.0.0.msi` (WiX/jpackage;
-run `mvn package` first). It bundles its own Java runtime, so end users need
-nothing installed. Install silently with `msiexec /i <msi> /qn`; the app then
-appears on the Start menu as **QFT Demand Notice Generator**.
+Produces `target/setup/QFT Demand Notice Generator-<version>.msi` (WiX/jpackage;
+the version comes from `pom.xml`; run `mvn package` first). It bundles its own
+Java runtime, so end users need nothing installed. Install silently with
+`msiexec /i <msi> /qn`; the app then appears on the Start menu as **QFT Demand
+Notice Generator**.
 
 ## Run from source
 
