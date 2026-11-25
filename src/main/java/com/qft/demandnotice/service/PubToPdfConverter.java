@@ -95,7 +95,7 @@ public final class PubToPdfConverter {
                         + "prompts.\n\nPowerShell output:\n" + output.trim());
             }
         } finally {
-            Files.deleteIfExists(pubCopy);
+            TempFiles.deleteQuietly(pubCopy);
         }
     }
 

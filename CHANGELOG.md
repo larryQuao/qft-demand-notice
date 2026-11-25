@@ -8,6 +8,43 @@ Each implemented change set ships as a version bump of the application
 - **MINOR** - new features
 - **PATCH** - fixes without new features
 
+## [1.2.2] - 2026-11-25
+
+### Fixed
+- **Blank letters with `#` instead of text (the important one).** A freshly
+  started Microsoft Publisher cannot resolve any font until it has created a
+  document, so the *first* `.pub` it **opened** had every glyph stored as `#`:
+  the converted PDF was blank, and auto-tokenizing found no dates or amounts.
+  Both COM scripts (`pub_to_pdf.ps1`, `tokenize_pub.ps1`) now create and close
+  a throwaway document before opening the real file, which initialises the
+  font table. Verified against a real Tier 2 letter: the PDF now contains the
+  full text and all four fields are recognised.
+- **"File is in use" after a successful conversion.** Publisher keeps a handle
+  on the temp `.pub`/`.pdf` for a moment after the script exits, so deleting
+  them in a `finally` block could throw and turn a good conversion into a
+  failure. Cleanup is now best-effort (`TempFiles.deleteQuietly`), and a
+  leftover temp file is retried at JVM exit.
+- **Edited templates were ignored.** If the `.pub` was saved again while the
+  app was open, the previous conversion (and its disk-cache entry) was reused.
+  The app now records the file's timestamp *before* converting and re-converts
+  whenever the file changed, including when the edit lands mid-conversion.
+- **Stale preview could overwrite a newer one.** A preview that finished after
+  another template was selected is now discarded instead of being shown.
+- **Preview opened at 100 % (cropped).** The preview now fits the whole page to
+  the window as soon as it is laid out.
+- Cache entries from the affected pipeline are abandoned
+  (`TemplateCache.PIPELINE_VERSION` 1 → 2), so previously blank conversions are
+  never served again.
+
+### Changed
+- The preview window takes its fixed size/position only when it actually opens;
+  refreshing an open preview keeps the size and position the user chose.
+- **Preview PDF** is disabled while a conversion is running, so it cannot queue
+  a second, competing preview.
+
+### Added
+- `TempFiles` helper (best-effort temp-file cleanup).
+
 ## [1.2.1] - 2026-11-20
 
 ### Added

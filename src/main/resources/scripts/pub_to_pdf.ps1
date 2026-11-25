@@ -20,8 +20,19 @@ $doc = $null
 
 try {
     $pub = New-Object -ComObject Publisher.Application
-    # Setting Visible on an already-running instance hangs some Office builds.
-    if (-not $wasRunning) { try { $pub.Visible = $false } catch { } }
+
+    # Warm-up: Publisher only builds its font table once a document has been
+    # created in the process. Without this, the FIRST document a fresh COM
+    # instance OPENS has no usable fonts - every glyph is stored as "#" and
+    # the exported PDF is blank. Creating and closing a throwaway document
+    # initialises the font table, so the real document opens intact. The
+    # throwaway is never saved, so no file on disk is touched.
+    $warm = $null
+    try { $warm = $pub.NewDocument() } catch {
+        Write-Host "Publisher warm-up skipped: $($_.Exception.Message)"
+    }
+    if ($null -ne $warm) { try { $warm.Close() } catch { } }
+    $warm = $null
 
     # Publisher opens documents through the Application object (the
     # Documents collection has no Open method - unlike Word).

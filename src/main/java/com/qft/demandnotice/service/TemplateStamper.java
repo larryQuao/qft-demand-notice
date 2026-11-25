@@ -265,17 +265,17 @@ public final class TemplateStamper {
                         return new PreparedTemplate(tokenizedPdf, tokens,
                                 report.replaced(), report.missed(), true);
                     } finally {
-                        Files.deleteIfExists(convertedTokenized);
+                        TempFiles.deleteQuietly(convertedTokenized);
                     }
                 }
                 // Nothing could be tokenized: fall back to the plain conversion,
                 // so the preview still shows the letter as it is.
                 return new PreparedTemplate(pdf, List.of(), List.of(), report.missed(), true);
             } finally {
-                Files.deleteIfExists(tokenizedCopy);
+                TempFiles.deleteQuietly(tokenizedCopy);
             }
         } finally {
-            Files.deleteIfExists(convertedPdf);
+            TempFiles.deleteQuietly(convertedPdf);
         }
     }
 

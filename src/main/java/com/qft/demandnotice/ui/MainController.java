@@ -87,19 +87,17 @@ public class MainController {
                 worker.setDaemon(true);
                 return worker;
             });
-    /** Conversion in flight (or done) for {@link #selectedTemplate}. */
-    private java.util.concurrent.CompletableFuture<TemplateStamper.PreparedTemplate>
-            preparation;
-
     /**
-     * The currently converted template. Converting with Microsoft Publisher
-     * takes 15-20 s, so the result is cached and only re-stamped (fast) when
-     * the preview is refreshed. Invalidated whenever the template changes.
+     * One conversion of a selected .pub. The timestamp is captured before the
+     * conversion starts, so a file edited while Publisher is running is
+     * recognised as stale instead of being trusted.
      */
-    private TemplateStamper.PreparedTemplate preparedTemplate;
-    /** Which .pub {@link #preparedTemplate} was converted from, to detect edits. */
-    private Path preparedFrom;
-    private FileTime preparedFromStamp;
+    private record TemplatePreparation(Path pub, FileTime stamp,
+                                       CompletableFuture<TemplateStamper.PreparedTemplate> future) {
+    }
+
+    /** Conversion in flight (or done) for {@link #selectedTemplate}. */
+    private TemplatePreparation preparation;
     /** The stage of the (reused) preview window, if it has been opened. */
     private Stage previewStage;
     private PdfPreviewController previewController;
@@ -229,9 +227,6 @@ public class MainController {
 
     /** Drops the cached conversion; the next preview/save re-converts the .pub. */
     private void invalidatePreparedTemplate() {
-        preparedTemplate = null;
-        preparedFrom = null;
-        preparedFromStamp = null;
         // The running conversion is left alone on purpose: its result lands in
         // the disk cache, so switching back to that .pub later is instant.
         preparation = null;
@@ -247,6 +242,7 @@ public class MainController {
         if (template == null) {
             return;
         }
+        final FileTime startedFrom = stampOf(template);
         CompletableFuture<TemplateStamper.PreparedTemplate> thisRun =
                 CompletableFuture.supplyAsync(() -> {
                     try {
@@ -255,20 +251,14 @@ public class MainController {
                         throw new CompletionException(e);
                     }
                 }, templatePreparer);
-        preparation = thisRun;
+        final TemplatePreparation run = new TemplatePreparation(template, startedFrom, thisRun);
+        preparation = run;
         thisRun.whenComplete((prepared, error) -> Platform.runLater(() -> {
-            if (preparation != thisRun) {
+            if (preparation != run) {
                 return; // superseded by a different template
             }
             if (error != null) {
                 setStatus("Template conversion failed: " + rootMessage(error), false);
-                return;
-            }
-            try {
-                preparedTemplate = prepared;
-                preparedFrom = template;
-                preparedFromStamp = stampOf(template);
-            } catch (IOException e) {
                 return;
             }
             setStatus("Template is ready for preview.", true);
@@ -310,13 +300,17 @@ public class MainController {
      * the UI thread only renders the finished bytes.
      */
     private void prepareAndPreview(DemandNoticeData data) {
-        if (preparation == null || preparation.isCompletedExceptionally()) {
-            // First preview after launch (or the previous attempt failed, e.g.
-            // Publisher was busy): start a fresh conversion.
+        TemplatePreparation run = preparation;
+        if (run == null || run.future().isCompletedExceptionally()
+                || (run.future().isDone() && !isCurrent(run, selectedTemplate))) {
+            // First preview after launch, the previous attempt failed (e.g.
+            // Publisher was busy), or the .pub was edited after conversion:
+            // start a fresh conversion.
             startTemplatePreparation();
+            run = preparation;
         }
-        final CompletableFuture<TemplateStamper.PreparedTemplate> scheduled = preparation;
-        boolean converting = !scheduled.isDone();
+        final TemplatePreparation scheduled = run;
+        boolean converting = !scheduled.future().isDone();
         setBusy(true, converting
                 ? "Converting the template with Microsoft Publisher, please wait..."
                 : "Updating the preview...");
@@ -324,29 +318,41 @@ public class MainController {
             previewController.setSaveEnabled(false);
         }
 
-        final Path from = selectedTemplate;
         Task<PreviewPayload> task = new Task<>() {
             @Override
             protected PreviewPayload call() throws Exception {
-                TemplateStamper.PreparedTemplate prepared = scheduled.get();
+                TemplateStamper.PreparedTemplate prepared = scheduled.future().get();
                 TemplateStamper.StampOutcome outcome = prepared.stamp(data);
-                return new PreviewPayload(prepared, outcome, from, stampOf(from));
+                return new PreviewPayload(prepared, outcome);
             }
         };
 
         task.setOnSucceeded(e -> {
+            if (scheduled != preparation) {
+                // Another template was selected while this one was converting;
+                // never overwrite the newer selection with this stale result.
+                setBusy(false, null);
+                return;
+            }
+            if (!isCurrent(scheduled, selectedTemplate)) {
+                // The .pub was saved again while Publisher was converting it:
+                // convert the new bytes and preview those instead.
+                setBusy(false, null);
+                prepareAndPreview(data);
+                return;
+            }
             setBusy(false, null);
             PreviewPayload payload = task.getValue();
-            preparedTemplate = payload.prepared;
-            preparedFrom = payload.from;
-            preparedFromStamp = payload.stamp;
-            showPreview(payload.outcome.pdfBytes(),
-                    buildTokenNote(payload.prepared, payload.outcome),
-                    previewStatus(payload.outcome), !payload.outcome.replacedTokens().isEmpty());
+            showPreview(payload.outcome().pdfBytes(),
+                    buildTokenNote(payload.prepared(), payload.outcome()),
+                    previewStatus(payload.outcome()), !payload.outcome().replacedTokens().isEmpty());
         });
 
         task.setOnFailed(e -> {
             setBusy(false, null);
+            if (scheduled != preparation) {
+                return; // a newer template/conversion owns the UI now
+            }
             Throwable error = task.getException();
             String detail = error instanceof java.util.concurrent.CompletionException
                     && error.getCause() != null
@@ -358,25 +364,19 @@ public class MainController {
     }
 
     private record PreviewPayload(TemplateStamper.PreparedTemplate prepared,
-                                  TemplateStamper.StampOutcome outcome,
-                                  Path from, FileTime stamp) {
+                                  TemplateStamper.StampOutcome outcome) {
     }
 
-    /** True when the cached conversion matches the selected .pub on disk. */
-    private boolean isPreparedTemplateCurrent() {
-        if (preparedTemplate == null || selectedTemplate == null
-                || !selectedTemplate.equals(preparedFrom)) {
+    /** True when a finished conversion still matches the .pub on disk. */
+    private static boolean isCurrent(TemplatePreparation run, Path selected) {
+        if (run == null || selected == null || !selected.equals(run.pub())
+                || !run.future().isDone() || run.future().isCompletedExceptionally()) {
             return false;
         }
-        try {
-            return preparedFromStamp != null
-                    && preparedFromStamp.equals(stampOf(selectedTemplate));
-        } catch (IOException e) {
-            return false;
-        }
+        return run.stamp() != null && run.stamp().equals(stampOf(selected));
     }
 
-    private static FileTime stampOf(Path file) throws IOException {
+    private static FileTime stampOf(Path file) {
         try {
             return Files.getLastModifiedTime(file);
         } catch (IOException e) {
@@ -426,7 +426,12 @@ public class MainController {
             previewController.showPdf(pdfBytes, tokenNote);
             // Saving only makes sense when the values actually reached the PDF.
             previewController.setSaveEnabled(saveEnabled);
-            openAtFixedSize(previewStage);
+            // Only a real open gets the fixed size/position; refreshing an open
+            // preview must not undo the user's resize or move.
+            boolean opening = !previewStage.isShowing();
+            if (opening) {
+                openAtFixedSize(previewStage);
+            }
             previewStage.show();
             previewStage.toFront();
             setStatus(statusNote, saveEnabled);
@@ -655,6 +660,7 @@ public class MainController {
 
     private void setBusy(boolean busy, String message) {
         generateButton.setDisable(busy);
+        previewButton.setDisable(busy);
         clearButton.setDisable(busy);
         browseTemplateButton.setDisable(busy);
         if (message != null) {

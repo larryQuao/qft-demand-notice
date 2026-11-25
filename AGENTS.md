@@ -31,10 +31,15 @@ pension contributions, matching the QFT (Qlac Financial Trust) sample layout.
    start.
 3. **The installed app requires no Java** (jpackage bundles the runtime).
 4. **Main window fits the desktop work area** (screen minus taskbar); the
-   preview window opens at one fixed, centered size on every open.
+   preview window opens at one fixed, centered size and fitted to the page.
 5. **Preview is the exact bytes saved** — save-from-preview writes the PDF that
    was rendered.
-6. **Version every change set** (user's explicit standing instruction:
+6. **The Publisher font warm-up stays.** Both COM scripts create and close a
+   throwaway document before opening the real `.pub`. A freshly started
+   Publisher has no font table until it creates a document, so without the
+   warm-up the first opened `.pub` renders every glyph as `#`: the PDF is blank
+   and the tokenizer finds no dates or amounts.
+7. **Version every change set** (user's explicit standing instruction:
    "whenever I implement changes, make it versions and also add documentation to
    the changes and features"). Bump `pom.xml`; the MSI script reads it
    automatically. MAJOR = output/workflow rework, MINOR = new feature,
@@ -44,7 +49,8 @@ pension contributions, matching the QFT (Qlac Financial Trust) sample layout.
 ## 3. Build / verify / release on this machine
 
 ```powershell
-# Tests (17 tests; all passed at last handoff)
+# Tests (17 tests; 17/17 pass, none skipped - close Publisher first, or the
+# two Publisher end-to-end tests skip themselves)
 & "C:\Users\Administrator\tools\apache-maven-3.9.16\bin\mvn.cmd" -o test
 
 # Package + installer (installer version comes from pom.xml automatically)
@@ -53,7 +59,7 @@ powershell -ExecutionPolicy Bypass -File build\setup\build_installer.ps1
 
 # Install / upgrade (newer version upgrades in place; same-version reinstall -> 1638)
 Get-Process -Name "QFT Demand Notice Generator" -ErrorAction SilentlyContinue | Stop-Process -Force
-cmd /c 'msiexec /i "C:\Users\Administrator\Documents\demand_notice_creator\qft-demand-notice\target\setup\QFT Demand Notice Generator-<VERSION>.msi" /qn'
+cmd /c 'msiexec /i "C:\Users\Administrator\Documents\Projects\qft-demand-notice\target\setup\QFT Demand Notice Generator-<VERSION>.msi" /qn'
 Start-Process "$env:LOCALAPPDATA\QFT Demand Notice Generator\QFT Demand Notice Generator.exe"
 ```
 
@@ -84,6 +90,7 @@ src/main/java/com/qft/demandnotice/
 │   ├── PubToPdfTokenizer.java     # inserts tokens into a COPY of a filled-in .pub
 │   ├── TemplateCache.java         # disk cache of converted PDFs (SHA-256 of .pub bytes)
 │   ├── ContentStreamEditor.java   # token removal + overlap-free line reflow
+│   ├── TempFiles.java             # best-effort temp cleanup (Publisher holds handles)
 │   └── TemplateStamper.java       # stamping pipeline + cache-first prepare(Path)
 ├── ui/MainController.java         # form, Browse, drag/drop, prefetch, status, preview orchestration
 ├── ui/PdfPreviewController.java   # rendering, paging, fit zoom, gesture zoom/pan, save
@@ -104,6 +111,17 @@ reflow (`TemplateStamper` + `ContentStreamEditor`) → PDF bytes → preview →
 Preview awaits the same preparation future; a failed conversion is retried on
 the next click. Cold prepare ~28 s, warm ~2 s (including JVM startup); stamping
 ~250 ms, rendering ~950 ms. Publisher modal dialogs wait up to 4 minutes.
+
+**Publisher COM quirk (cost a whole session to find):** a freshly started
+Publisher has no font table. The *first* document it **opens** (rather than
+creates) renders every character as `#` — the PDF is blank and
+`TextRange.Text` returns `#` runs, so the tokenizer recognises nothing. Both
+scripts therefore create and close a throwaway document before opening the
+real file. Diagnostics that "prove" this: `$doc.Stories.Count` is 0 and a
+`#` per character; with the warm-up, `Stories.Count` is 4 for the real Tier 2
+letter and the PDF contains the full text. Note `Application.Visible` and
+`Application.Fonts` do not exist on Publisher's Application object
+(`$null.Count` in PowerShell misleadingly reports 0).
 
 ## 5. Session memory — where work ended
 
@@ -139,19 +157,32 @@ desktop-fitting UI, versioned releases with documented changes.
   "for the month of … is due not later than the …" segment, so
   `{{PERIOD}}`/`{{DEADLINE}}` could not be filled. Status now names the missing
   placeholders instead of only reporting a count.
-- **v1.2.1 (2026-11-20, this handoff):** added this `AGENTS.md` session-memory
-  document; corrected the stale `1.0.0` MSI filename in `README.md`.
+- **v1.2.1 (2026-11-20):** added this `AGENTS.md` session-memory document;
+  corrected the stale `1.0.0` MSI filename in `README.md`.
+- **v1.2.2 (2026-11-25):** fixed the blank-letter bug — Publisher COM scripts
+  now warm up the font table with a throwaway document, so the first opened
+  `.pub` no longer renders as `#` (verified against the real Tier 2 letter:
+  full text + all four fields auto-recognised). Also: best-effort temp cleanup
+  (`TempFiles`) instead of failing a successful conversion on a locked temp
+  file; edited `.pub` files are re-converted on the next preview; stale preview
+  results are discarded; the preview opens fitted to the page; the preview
+  keeps the user's size/position when refreshed; **Preview PDF** is disabled
+  while busy. `TemplateCache.PIPELINE_VERSION` bumped to 2 so previously blank
+  cached conversions are abandoned. **The two Publisher integration tests now
+  run and pass for the first time** (previously always skipped).
 
 ### Current state at handoff
 - Working branch `main`; all work committed and pushed to
-  `https://github.com/larryQuao/qft-demand-notice.git`. Commit trail at v1.2.0
-  (oldest → newest): `ee59b99` → `02f9743` (v1.1.0) → `1e5054e` (gitignore)
-  → `b2b640b` (v1.2.0) → `48a2199` (gitignore); the v1.2.1 documentation
-  commit is newest. Always check `git log --oneline -5` and `git status --short`.
-- `mvn -o test` → **17/17 pass** at last verification. Package + MSI build
-  succeeded; install exit code 0; app relaunched and running.
-- Installed app version at last check: **1.2.0** after the v1.2.0 release;
-  updated to **1.2.1** by this documentation release (verify via registry).
+  `https://github.com/larryQuao/qft-demand-notice.git`. Always check
+  `git log --oneline -5` and `git status --short`.
+- `mvn -o test` → **17/17 pass, 0 skipped** (the Publisher end-to-end tests
+  really execute now; they need Publisher *not* already running, which is what
+  the test's `publisherRunning()` assumption checks).
+- Toolchain on this machine: Temurin JDK 21 at
+  `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.10002-hotspot` (`JAVA_HOME`
+  set machine-wide), Maven 3.9.16 at
+  `C:\Users\Administrator\tools\apache-maven-3.9.16`. A shell that predates the
+  install must set `JAVA_HOME`/`PATH` explicitly.
 - Deliverable: `target\setup\QFT Demand Notice Generator-<VERSION>.msi`
   (~40 MB, bundled runtime).
 - Active tasks: **none**. Blockers: **none**.
@@ -160,11 +191,19 @@ desktop-fitting UI, versioned releases with documented changes.
 - Fixed recipient/signatory text, body wording, address block, board names,
   brand colours and layout coordinates are reconstructed in `Constants.java`
   and should be verified against the original sample letter (see README's
-  "Known placeholders" section and `DEMAND_NOTICE_PDF_GENERATOR_PLAN.md`).
+  "Known placeholders" section). The old `DEMAND_NOTICE_PDF_GENERATOR_PLAN.md`
+  reference was removed: that file does not exist in the repo.
 - If a `.pub` has no tokens, the tokenizer recognises date/amount patterns;
   unrecognised text is left as-is and reported in the preview note/status.
-- `README.md` previously showed a hard-coded `1.0.0` MSI name — fixed to the
-  pom-derived versioned name.
+- A `.pub` copied from a network share carries a `Zone.Identifier` (Mark of the
+  Web). Publisher then refuses it with "Publisher has detected a problem in the
+  file". The app is unaffected because `Files.copy` does not copy alternate
+  data streams, but manual PowerShell tests on a freshly copied share file will
+  hit this — run `Unblock-File` first.
+- Publisher's Application object has no `Visible`/`Fonts` members; the old
+  `try { $pub.Visible = $false }` lines were no-ops and have been removed.
+  `$null.Count` returns 0 in PowerShell, so "0 fonts/0 windows" readings are
+  meaningless — check `$null -eq $obj.Property` instead.
 
 ### Immediate next steps if asked to continue
 1. For any code/feature change: bump `pom.xml`, add a dated `CHANGELOG.md`
@@ -185,7 +224,7 @@ desktop-fitting UI, versioned releases with documented changes.
 - Keep changes scoped; read the relevant source file before editing it.
 - Do not regenerate or hand-edit the MSI by changing versions in two places —
   `pom.xml` alone drives the installer.
-- After every implementation, follow section 2 invariant 6 exactly; the user
+- After every implementation, follow section 2 invariant 7 exactly; the user
   checks version numbers and documentation.
 - Prefer the exact verification commands in section 3; report test counts and
   installed version in the final response.

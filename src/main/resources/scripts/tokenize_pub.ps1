@@ -71,7 +71,18 @@ function All-Dates($text) {
 
 try {
     $pub = New-Object -ComObject Publisher.Application
-    if (-not $wasRunning) { try { $pub.Visible = $false } catch { } }
+
+    # Warm-up: Publisher only builds its font table once a document has been
+    # created in the process. Without this, the FIRST document a fresh COM
+    # instance OPENS has no usable fonts - every glyph reads back as "#", so
+    # no dates or amounts can be recognised. Creating and closing a throwaway
+    # document initialises the font table; it is never saved.
+    $warm = $null
+    try { $warm = $pub.NewDocument() } catch {
+        Write-Host "Publisher warm-up skipped: $($_.Exception.Message)"
+    }
+    if ($null -ne $warm) { try { $warm.Close() } catch { } }
+    $warm = $null
 
     $doc = $pub.Open($PubPath)
 

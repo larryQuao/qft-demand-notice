@@ -48,6 +48,8 @@ public class PdfPreviewController {
     private int pageIndex;
     private float zoom = 1f;
     private float fitZoom = 1f;
+    /** True while a freshly loaded page waits for the viewport to be laid out. */
+    private boolean fitPending;
 
     /** Invoked when the user accepts the preview; the host owns the Save flow. */
     private Consumer<PdfPreviewController> onSave;
@@ -63,6 +65,7 @@ public class PdfPreviewController {
                     pageContainer.setMinWidth(bounds.getWidth());
                     pageContainer.setMinHeight(bounds.getHeight());
                     recomputeFitZoom(bounds.getWidth(), bounds.getHeight());
+                    applyPendingFit();
                 });
         installGestureZoom();
     }
@@ -166,8 +169,10 @@ public class PdfPreviewController {
         this.document = Loader.loadPDF(this.pdfBytes);
         this.renderer = new PDFRenderer(document);
         this.pageIndex = 0;
+        this.fitPending = true;
         tokenStatusLabel.setText(tokenStatus);
         renderPage();
+        applyPendingFit();
         updateChrome();
     }
 
@@ -243,6 +248,9 @@ public class PdfPreviewController {
                     ImageType.RGB);
             previewImageView.setImage(toFxImage(image));
             applyImageSize();
+            recomputeFitZoom(previewScrollPane.getViewportBounds().getWidth(),
+                    previewScrollPane.getViewportBounds().getHeight());
+            applyPendingFit();
         } catch (IOException e) {
             tokenStatusLabel.setText("The preview could not be rendered: " + e.getMessage());
         }
@@ -279,8 +287,27 @@ public class PdfPreviewController {
         double imageWidth = previewImageView.getImage().getWidth();
         double imageHeight = previewImageView.getImage().getHeight();
         // 24px of breathing room so the page is not flush against the edges.
-        fitZoom = (float) Math.max(MIN_ZOOM,
-                Math.min((viewportWidth - 24) / imageWidth, (viewportHeight - 24) / imageHeight));
+        fitZoom = (float) Math.max(MIN_ZOOM, Math.min(MAX_ZOOM,
+                Math.min((viewportWidth - 24) / imageWidth,
+                        (viewportHeight - 24) / imageHeight)));
+    }
+
+    /**
+     * Applies the fit zoom once the freshly loaded page and the viewport are
+     * both known, so a newly opened preview shows the whole page instead of a
+     * cropped 100 % view. The viewport listener retries after the window is
+     * shown when the bounds were still zero during {@link #showPdf}.
+     */
+    private void applyPendingFit() {
+        if (!fitPending || previewImageView.getImage() == null) {
+            return;
+        }
+        javafx.geometry.Bounds viewport = previewScrollPane.getViewportBounds();
+        if (viewport.getWidth() <= 0 || viewport.getHeight() <= 0) {
+            return;
+        }
+        fitPending = false;
+        setZoom(fitZoom);
     }
 
     private void updateChrome() {

@@ -33,7 +33,7 @@ final class TemplateCache {
      * Bump this when the conversion/tokenizing pipeline changes in a way that
      * alters the produced PDF, so previously cached files are abandoned.
      */
-    static final int PIPELINE_VERSION = 1;
+    static final int PIPELINE_VERSION = 2;
 
     private TemplateCache() {
     }
