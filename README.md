@@ -7,6 +7,8 @@ pension contributions, matching the QFT (Qlac Financial Trust) sample layout.
 
 - Java 21 (JDK; e.g. Eclipse Temurin) - only for building from source
 - Maven 3.9+
+- WiX Toolset 3.14 - only for building the Windows installer (`jpackage`
+  drives `candle.exe`/`light.exe` to produce the MSI)
 - To *run* the app, no Java is needed if you use the bundled installer (below)
 - Microsoft Publisher - only when using a `.pub` letter template
 
@@ -37,6 +39,12 @@ the version comes from `pom.xml`; run `mvn package` first). It bundles its own
 Java runtime, so end users need nothing installed. Install silently with
 `msiexec /i <msi> /qn`; the app then appears on the Start menu as **QFT Demand
 Notice Generator**.
+
+`jpackage` builds MSI files through WiX 3.x, so `candle.exe` and `light.exe`
+must be on `PATH` (default install location:
+`C:\Program Files (x86)\WiX Toolset v3.14\bin`). Without WiX the build stops
+with `Can not find WiX tools (light.exe, candle.exe)`. WiX 4+ is not supported
+by the JDK 21 `jpackage`.
 
 ## Run from source
 

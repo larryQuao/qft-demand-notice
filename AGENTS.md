@@ -67,6 +67,10 @@ Useful locations:
 
 - Installed app: `%LOCALAPPDATA%\QFT Demand Notice Generator\QFT Demand Notice Generator.exe`
 - Template cache: `%LOCALAPPDATA%\QFT Demand Notice Generator\template-cache`
+- WiX Toolset 3.14: `C:\Program Files (x86)\WiX Toolset v3.14\bin` — on the
+  machine `PATH`. `jpackage` needs `candle.exe`/`light.exe` there; without it the
+  installer build fails with `Can not find WiX tools (light.exe, candle.exe)`.
+  JDK 21's `jpackage` supports WiX 3.x only (not 4/5+).
 - Version check: `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`,
   `DisplayName` like `*QFT Demand*` → `DisplayVersion`.
 - Old v1.0.0 uninstall product code (only needed for a forced clean uninstall):
@@ -181,8 +185,10 @@ desktop-fitting UI, versioned releases with documented changes.
 - Toolchain on this machine: Temurin JDK 21 at
   `C:\Program Files\Eclipse Adoptium\jdk-21.0.13.10002-hotspot` (`JAVA_HOME`
   set machine-wide), Maven 3.9.16 at
-  `C:\Users\Administrator\tools\apache-maven-3.9.16`. A shell that predates the
-  install must set `JAVA_HOME`/`PATH` explicitly.
+  `C:\Users\Administrator\tools\apache-maven-3.9.16`, WiX Toolset 3.14 at
+  `C:\Program Files (x86)\WiX Toolset v3.14\bin` (all `bin` folders on the
+  machine `PATH`). A shell that predates these installs must rebuild its `PATH`
+  from the registry or set it explicitly.
 - Deliverable: `target\setup\QFT Demand Notice Generator-<VERSION>.msi`
   (~40 MB, bundled runtime).
 - Active tasks: **none**. Blockers: **none**.

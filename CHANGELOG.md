@@ -8,6 +8,21 @@ Each implemented change set ships as a version bump of the application
 - **MINOR** - new features
 - **PATCH** - fixes without new features
 
+## [1.2.3] - 2026-11-25
+
+### Changed
+- Documented the installer toolchain, which previously existed only as tribal
+  knowledge: `jpackage` builds the MSI through **WiX Toolset 3.x**, so
+  `candle.exe`/`light.exe` must be on `PATH` (WiX 4+ is not supported by the
+  JDK 21 `jpackage`). Without it the build stops with
+  `Can not find WiX tools (light.exe, candle.exe)`.
+- Installed WiX Toolset 3.14 on this machine and added its `bin` folder to the
+  machine `PATH`; the installer build was then re-verified from an environment
+  built only from the registry (no manual `PATH` fixes), producing
+  `QFT Demand Notice Generator-1.2.3.msi` (40.4 MB).
+
+No application behaviour changed in this release.
+
 ## [1.2.2] - 2026-11-25
 
 ### Fixed
